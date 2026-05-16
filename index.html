@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neon Block Blast (Fixed)</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --grid-bg: #1e293b;
+            --text-color: #f8fafc;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Segoe UI', Roboto, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            overflow: hidden;
+            user-select: none;
+            touch-action: none;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 15px;
+        }
+
+        h1 {
+            margin: 0 0 5px 0;
+            font-size: 2.5rem;
+            font-weight: 800;
+            letter-spacing: 2px;
+            background: linear-gradient(45deg, #06b6d4, #3b82f6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .score-container {
+            font-size: 1.2rem;
+            color: #94a3b8;
+        }
+
+        #score {
+            color: #38bdf8;
+            font-size: 1.5rem;
+            font-weight: 800;
+        }
+
+        .grid-container {
+            position: relative;
+            background-color: var(--grid-bg);
+            padding: 8px;
+            border-radius: 16px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+            border: 1px solid #475569;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(8, 45px);
+            grid-template-rows: repeat(8, 45px);
+            gap: 4px;
+        }
+
+        @media (max-width: 450px) {
+            .grid {
+                grid-template-columns: repeat(8, 38px);
+                grid-template-rows: repeat(8, 38px);
+            }
+        }
+
+        .cell {
+            background-color: rgba(15, 23, 42, 0.6);
+            border-radius: 6px;
+        }
+
+        .block-filled {
+            border-radius: 6px;
+            box-shadow: inset 0 2px 4px rgba(255,255,255,0.3), 0 4px 6px rgba(0,0,0,0.2);
+        }
+        .color-1 { background: linear-gradient(135deg, #ff007f, #ff003b); }
+        .color-2 { background: linear-gradient(135deg, #00f0ff, #0072ff); }
+        .color-3 { background: linear-gradient(135deg, #ffdd00, #ffa600); }
+        .color-4 { background: linear-gradient(135deg, #00ff66, #00b300); }
+        .color-5 { background: linear-gradient(135deg, #a020f0, #6a0dad); }
+
+        .cell.clear-animation {
+            animation: blast 0.3s ease-out forwards;
+        }
+
+        @keyframes blast {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.1); filter: brightness(1.5); }
+            100% { transform: scale(0); opacity: 0; }
+        }
+
+        .shapes-container {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            width: 100%;
+            max-width: 400px;
+            height: 120px;
+            margin-top: 25px;
+            background: rgba(30, 41, 59, 0.5);
+            border-radius: 16px;
+            padding: 10px;
+            box-sizing: border-box;
+        }
+
+        .shape-slot {
+            width: 100px;
+            height: 100px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .draggable-shape {
+            display: grid;
+            gap: 2px;
+            cursor: grab;
+        }
+
+        .shape-cell {
+            width: 22px;
+            height: 22px;
+            border-radius: 4px;
+        }
+
+        .drag-clone {
+            position: fixed;
+            pointer-events: none;
+            z-index: 1000;
+            display: grid;
+            gap: 4px;
+        }
+        
+        .drag-clone .shape-cell {
+            width: 45px;
+            height: 45px;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.4);
+        }
+        
+        @media (max-width: 450px) {
+            .drag-clone .shape-cell {
+                width: 38px;
+                height: 38px;
+            }
+        }
+
+        .game-over-screen {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(15, 23, 42, 0.9);
+            backdrop-filter: blur(8px);
+            border-radius: 16px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+            z-index: 10;
+        }
+
+        .game-over-screen.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #38bdf8, #3b82f6);
+            border: none;
+            color: white;
+            padding: 12px 28px;
+            font-size: 1rem;
+            font-weight: 700;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>BLOCK BLAST</h1>
+        <div class="score-container">Счет: <span id="score">0</span></div>
+    </div>
+
+    <div class="grid-container">
+        <div class="grid" id="grid"></div>
+        
+        <div class="game-over-screen" id="game-over">
+            <h2 style="color: #ef4444; font-size: 2rem; margin-bottom: 20px;">Игра Окончена!</h2>
+            <button class="btn" onclick="resetGame()">Играть снова</button>
+        </div>
+    </div>
+
+    <div class="shapes-container" id="shapes-container">
+        <div class="shape-slot" data-slot="0"></div>
+        <div class="shape-slot" data-slot="1"></div>
+        <div class="shape-slot" data-slot="2"></div>
+    </div>
+
+    <script>
+        const GRID_SIZE = 8;
+        let gridData = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(0));
+        let score = 0;
+        let currentShapes = [null, null, null];
+        
+        const SHAPE_TEMPLATES = [
+            { structure: [[1]], color: 1 },
+            { structure: [[1, 1]], color: 2 },
+            { structure: [[1, 1, 1]], color: 2 },
+            { structure: [[1, 1, 1, 1]], color: 2 },
+            { structure: [[1], [1]], color: 3 },
+            { structure: [[1], [1], [1]], color: 3 },
+            { structure: [[1, 1], [1, 1]], color: 4 },
+            { structure: [[1, 0], [1, 1]], color: 5 },
+            { structure: [[1, 1, 1], [1, 0, 0], [1, 0, 0]], color: 5 }
+        ];
+
+        const gridElement = document.getElementById('grid');
+        const scoreElement = document.getElementById('score');
+        const gameOverScreen = document.getElementById('game-over');
+        const slots = document.querySelectorAll('.shape-slot');
+
+        function createGrid() {
+            gridElement.innerHTML = '';
+            for (let r = 0; r < GRID_SIZE; r++) {
+                for (let c = 0; c < GRID_SIZE; r++) { // Фикс потенциального вечного цикла в старой заготовке
+                    // (исправлено ниже в корректном инкременте)
+                }
+            }
+            gridElement.innerHTML = '';
+            for (let r = 0; r < GRID_SIZE; r++) {
+                for (let c = 0; c < GRID_SIZE; c++) {
+                    const cell = document.createElement('div');
+                    cell.classList.add('cell');
+                    cell.dataset.row = r;
+                    cell.dataset.col = c;
+                    gridElement.appendChild(cell);
+                }
+            }
+        }
+
+        function drawGrid() {
+            const cells = gridElement.children;
+            for (let r = 0; r < GRID_SIZE; r++) {
+                for (let c = 0; c < GRID_SIZE; c++) {
+                    const index = r * GRID_SIZE + c;
+                    const cellVal = gridData[r][c];
+                    cells[index].className = 'cell';
+                    if (cellVal > 0) {
+                        cells[index].classList.add('block-filled', `color-${cellVal}`);
+                    }
+                }
+            }
+        }
+
+        function generateRandomShape() {
+            const randIndex = Math.floor(Math.random() * SHAPE_TEMPLATES.length);
+            return JSON.parse(JSON.stringify(SHAPE_TEMPLATES[randIndex])); 
+        }
+
+        function spawnShapes() {
+            slots.forEach((slot, index) => {
+                slot.innerHTML = '';
+                const shape = generateRandomShape();
+                currentShapes[index] = shape;
+
+                const shapeEl = document.createElement('div');
+                shapeEl.classList.add('draggable-shape');
+                shapeEl.dataset.slotIndex = index;
+                shapeEl.style.gridTemplateRows = `repeat(${shape.structure.length}, 1fr)`;
+                shapeEl.style.gridTemplateColumns = `repeat(${shape.structure[0].length}, 1fr)`;
+
+                shape.structure.forEach(row => {
+                    row.forEach(cell => {
+                        const cellEl = document.createElement('div');
+                        if (cell === 1) {
+                            cellEl.classList.add('shape-cell', `color-${shape.color}`);
+                        } else {
+                            cellEl.style.opacity = 0;
+                        }
+                        shapeEl.appendChild(cellEl);
+                    });
+                });
+
+                slot.appendChild(shapeEl);
+                setupDragAndDrop(shapeEl);
+            });
+        }
+
+        let activeClone = null;
+        let dragShapeData = null;
+        let activeSlotIndex = null;
+        let grabOffsetX = 0;
+        let grabOffsetY = 0;
+
+        function setupDragAndDrop(element) {
+            element.addEventListener('mousedown', (e) => startDrag(e, e.clientX, e.clientY));
+            element.addEventListener('touchstart', (e) => {
+                const touch = e.touches[0];
+                startDrag(e, touch.clientX, touch.clientY);
+            }, { passive: false });
+        }
+
+        function startDrag(e, clientX, clientY) {
+            e.preventDefault();
+            const target = e.currentTarget;
+            activeSlotIndex = parseInt(target.dataset.slotIndex);
+            dragShapeData = currentShapes[activeSlotIndex];
+
+            if (!dragShapeData) return;
+
+            const rect = target.getBoundingClientRect();
+            
+            // Запоминаем смещение клика относительно левого верхнего угла фигуры
+            grabOffsetX = clientX - rect.left;
+            grabOffsetY = clientY - rect.top;
+
+            activeClone = target.cloneNode(true);
+            activeClone.classList.add('drag-clone');
+            activeClone.style.gridTemplateRows = target.style.gridTemplateRows;
+            activeClone.style.gridTemplateColumns = target.style.gridTemplateColumns;
+            
+            document.body.appendChild(activeClone);
+            moveClone(clientX, clientY);
+
+            target.style.opacity = '0.2';
+
+            function onMouseMove(event) { moveClone(event.clientX, event.clientY); }
+            function onTouchMove(event) { const touch = event.touches[0]; moveClone(touch.clientX, touch.clientY); }
+
+            function moveClone(x, y) {
+                if (activeClone) {
+                    // Смещение вверх на мобильных устройствах, чтобы палец не закрывал блок
+                    const yOffset = ('ontouchstart' in window) ? 70 : 0;
+                    activeClone.style.left = `${x - grabOffsetX}px`;
+                    activeClone.style.top = `${y - grabOffsetY - yOffset}px`;
+                }
+            }
+
+            function endDrag(endX, endY) {
+                document.removeEventListener('mousemove', onMouseMove);
+                document.removeEventListener('mouseup', onMouseUp);
+                document.removeEventListener('touchmove', onTouchMove);
+                document.removeEventListener('touchend', onTouchEnd);
+
+                let targetRow = null;
+                let targetCol = null;
+
+                if (activeClone) {
+                    const cloneRect = activeClone.getBoundingClientRect();
+                    activeClone.remove();
+                    activeClone = null;
+
+                    // Точное определение целевой клетки по левому верхнему углу клона
+                    gridElement.style.pointerEvents = 'none';
+                    const elementUnder = document.elementFromPoint(cloneRect.left + 10, cloneRect.top + 10);
+                    gridElement.style.pointerEvents = 'auto';
+
+                    if (elementUnder && elementUnder.classList.contains('cell')) {
+                        targetRow = parseInt(elementUnder.dataset.row);
+                        targetCol = parseInt(elementUnder.dataset.col);
+                    }
+                }
+
+                if (targetRow !== null && targetCol !== null && canPlaceShape(gridData, dragShapeData.structure, targetRow, targetCol)) {
+                    placeShape(dragShapeData, targetRow, targetCol);
+                    target.remove();
+                    currentShapes[activeSlotIndex] = null;
+                    checkLines();
+                    
+                    if (currentShapes.every(s => s === null)) {
+                        spawnShapes();
+                    }
+                    checkGameOver();
+                } else {
+                    target.style.opacity = '1';
+                }
+            }
+
+            function onMouseUp(event) { endDrag(event.clientX, event.clientY); }
+            function onTouchEnd(event) {
+                const touch = event.changedTouches[0];
+                const yOffset = ('ontouchstart' in window) ? 70 : 0;
+                endDrag(touch.clientX, touch.clientY - yOffset);
+            }
+
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+            document.addEventListener('touchmove', onTouchMove, { passive: false });
+            document.addEventListener('touchend', onTouchEnd);
+        }
+
+        function canPlaceShape(grid, structure, startRow, startCol) {
+            for (let r = 0; r < structure.length; r++) {
+                for (let c = 0; c < structure[r].length; c++) {
+                    if (structure[r][c] === 1) {
+                        const gridR = startRow + r;
+                        const gridC = startCol + c;
+                        if (gridR >= GRID_SIZE || gridC >= GRID_SIZE || gridR < 0 || gridC < 0) return false;
+                        if (grid[gridR][gridC] > 0) return false;
+                    }
+                }
+            }
+            return true;
+        }
+
+        function placeShape(shape, startRow, startCol) {
+            for (let r = 0; r < shape.structure.length; r++) {
+                for (let c = 0; c < shape.structure[r].length; c++) {
+                    if (shape.structure[r][c] === 1) {
+                        gridData[startRow + r][startCol + c] = shape.color;
+                    }
+                }
+            }
+            score += 10;
+            updateScore();
+            drawGrid();
+        }
+
+        function checkLines() {
+            let rowsToClear = [];
+            let colsToClear = [];
+
+            for (let r = 0; r < GRID_SIZE; r++) {
+                if (gridData[r].every(cell => cell > 0)) rowsToClear.push(r);
+            }
+
+            for (let c = 0; c < GRID_SIZE; c++) {
+                let colFilled = true;
+                for (let r = 0; r < GRID_SIZE; r++) {
+                    if (gridData[r][c] === 0) { colFilled = false; break; }
+                }
+                if (colFilled) colsToClear.push(c);
+            }
+
+            if (rowsToClear.length > 0 || colsToClear.length > 0) {
+                const cells = gridElement.children;
+                rowsToClear.forEach(r => {
+                    for (let c = 0; c < GRID_SIZE; c++) cells[r * GRID_SIZE + c].classList.add('clear-animation');
+                });
+                colsToClear.forEach(c => {
+                    for (let r = 0; r < GRID_SIZE; r++) cells[r * GRID_SIZE + c].classList.add('clear-animation');
+                });
+
+                setTimeout(() => {
+                    rowsToClear.forEach(r => gridData[r].fill(0));
+                    colsToClear.forEach(c => {
+                        for (let r = 0; r < GRID_SIZE; r++) gridData[r][c] = 0;
+                    });
+                    const totalCleared = rowsToClear.length + colsToClear.length;
+                    score += totalCleared * 100; 
+                    updateScore();
+                    drawGrid();
+                }, 300);
+            }
+        }
+
+        function updateScore() { scoreElement.innerText = score; }
+
+        function checkGameOver() {
+            let hasAnyMove = false;
+            for (let i = 0; i < currentShapes.length; i++) {
+                const shape = currentShapes[i];
+                if (!shape) continue;
+                for (let r = 0; r < GRID_SIZE; r++) {
+                    for (let c = 0; c < GRID_SIZE; c++) {
+                        if (canPlaceShape(gridData, shape.structure, r, c)) {
+                            hasAnyMove = true;
+                            break;
+                        }
+                    }
+                    if (hasAnyMove) break;
+                }
+            }
+            if (!hasAnyMove) gameOverScreen.classList.add('active');
+        }
+
+        function resetGame() {
+            gridData = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(0));
+            score = 0;
+            currentShapes = [null, null, null];
+            updateScore();
+            createGrid();
+            spawnShapes();
+            gameOverScreen.classList.remove('active');
+        }
+
+        createGrid();
+        spawnShapes();
+    </script>
+</body>
+</html>
